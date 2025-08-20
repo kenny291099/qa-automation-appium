@@ -1,0 +1,356 @@
+name: Android Automation Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Test environment'
+        required: true
+        default: 'ci'
+        type: choice
+        options:
+          - ci
+          - saucelabs
+      device:
+        description: 'Device configuration'
+        required: true
+        default: 'android_pixel_7'
+        type: choice
+        options:
+          - android_pixel_7
+          - android_samsung_s23
+          - android_pixel_6
+      test_suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - smoke
+          - login
+          - shopping
+          - products
+
+env:
+  JAVA_VERSION: '11'
+  MAVEN_VERSION: '3.8.6'
+  ANDROID_API_LEVEL: '33'
+  ANDROID_TARGET: 'google_apis'
+  ANDROID_ARCH: 'x86_64'
+  ANDROID_HOME: '/usr/local/lib/android/sdk'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      device: ${{ steps.set-env.outputs.device }}
+      test-suite: ${{ steps.set-env.outputs.test-suite }}
+    steps:
+      - name: Set environment variables
+        id: set-env
+        run: |
+          echo "environment=${{ github.event.inputs.environment || 'ci' }}" >> $GITHUB_OUTPUT
+          echo "device=${{ github.event.inputs.device || 'android_pixel_7' }}" >> $GITHUB_OUTPUT
+          echo "test-suite=${{ github.event.inputs.test_suite || 'all' }}" >> $GITHUB_OUTPUT
+
+  test-android:
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29, 33]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+          
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          
+      - name: Cache Android SDK
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+            ${{ env.ANDROID_HOME }}
+          key: ${{ runner.os }}-android-${{ matrix.api-level }}
+          
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        
+      - name: Create AVD and generate snapshot for caching
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ env.ANDROID_TARGET }}
+          arch: ${{ env.ANDROID_ARCH }}
+          profile: Nexus 6
+          cores: 2
+          ram-size: 4096M
+          heap-size: 1024M
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: echo "Generated AVD snapshot for caching."
+          
+      - name: Install Node.js for Appium
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install Appium
+        run: |
+          npm install -g appium@next
+          appium driver install uiautomator2
+          appium plugin install images
+          appium --version
+          
+      - name: Download Demo App APK
+        run: |
+          mkdir -p src/main/resources/apps
+          # Download the latest APK from GitHub releases
+          wget -O src/main/resources/apps/Android-MyDemoAppRN.1.3.0.build-244.apk \
+            https://github.com/saucelabs/my-demo-app-android/releases/download/v1.3.0/Android-MyDemoAppRN.1.3.0.build-244.apk
+            
+      - name: Validate Maven POM
+        run: mvn validate
+        
+      - name: Compile test code
+        run: mvn clean compile test-compile
+        
+      - name: Run Android Tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ env.ANDROID_TARGET }}
+          arch: ${{ env.ANDROID_ARCH }}
+          profile: Nexus 6
+          cores: 2
+          ram-size: 4096M
+          heap-size: 1024M
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            # Start Appium server in background
+            appium server --port 4723 --log-level info &
+            APPIUM_PID=$!
+            
+            # Wait for Appium to start
+            sleep 10
+            
+            # Wait for emulator to be ready
+            adb wait-for-device
+            adb shell input keyevent 82 # Unlock emulator
+            
+            # Run tests based on test suite selection
+            if [ "${{ needs.setup.outputs.test-suite }}" = "smoke" ]; then
+              mvn test -Dtest=SmokeTests -Denvironment=${{ needs.setup.outputs.environment }} -Ddevice=${{ needs.setup.outputs.device }}
+            elif [ "${{ needs.setup.outputs.test-suite }}" = "login" ]; then
+              mvn test -Dtest=LoginTests -Denvironment=${{ needs.setup.outputs.environment }} -Ddevice=${{ needs.setup.outputs.device }}
+            elif [ "${{ needs.setup.outputs.test-suite }}" = "shopping" ]; then
+              mvn test -Dtest=ShoppingCartTests -Denvironment=${{ needs.setup.outputs.environment }} -Ddevice=${{ needs.setup.outputs.device }}
+            elif [ "${{ needs.setup.outputs.test-suite }}" = "products" ]; then
+              mvn test -Dtest=ProductTests -Denvironment=${{ needs.setup.outputs.environment }} -Ddevice=${{ needs.setup.outputs.device }}
+            else
+              mvn test -Denvironment=${{ needs.setup.outputs.environment }} -Ddevice=${{ needs.setup.outputs.device }}
+            fi
+            
+            # Stop Appium server
+            kill $APPIUM_PID || true
+            
+      - name: Generate Allure Report
+        if: always()
+        run: |
+          mvn allure:report
+          
+      - name: Upload Allure Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: allure-results-api-${{ matrix.api-level }}
+          path: target/allure-results/
+          retention-days: 7
+          
+      - name: Upload Allure Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: allure-report-api-${{ matrix.api-level }}
+          path: target/allure-report/
+          retention-days: 7
+          
+      - name: Upload Screenshots
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: screenshots-api-${{ matrix.api-level }}
+          path: target/screenshots/
+          retention-days: 7
+          if-no-files-found: ignore
+          
+      - name: Upload Test Logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-logs-api-${{ matrix.api-level }}
+          path: target/logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  test-saucelabs:
+    if: ${{ needs.setup.outputs.environment == 'saucelabs' }}
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+          
+      - name: Upload App to Sauce Labs
+        run: |
+          # Download the APK
+          mkdir -p src/main/resources/apps
+          wget -O src/main/resources/apps/Android-MyDemoAppRN.1.3.0.build-244.apk \
+            https://github.com/saucelabs/my-demo-app-android/releases/download/v1.3.0/Android-MyDemoAppRN.1.3.0.build-244.apk
+          
+          # Upload to Sauce Labs Storage (if credentials are available)
+          if [ -n "${{ secrets.SAUCE_USERNAME }}" ] && [ -n "${{ secrets.SAUCE_ACCESS_KEY }}" ]; then
+            curl -u "${{ secrets.SAUCE_USERNAME }}:${{ secrets.SAUCE_ACCESS_KEY }}" \
+              -X POST "https://api.us-west-1.saucelabs.com/rest/v1/storage/upload" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @src/main/resources/apps/Android-MyDemoAppRN.1.3.0.build-244.apk
+          fi
+          
+      - name: Run Sauce Labs Tests
+        env:
+          SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
+          SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
+        run: |
+          if [ -n "$SAUCE_USERNAME" ] && [ -n "$SAUCE_ACCESS_KEY" ]; then
+            mvn test -Denvironment=saucelabs -Ddevice=${{ needs.setup.outputs.device }}
+          else
+            echo "Sauce Labs credentials not configured. Skipping Sauce Labs tests."
+            exit 0
+          fi
+          
+      - name: Generate Allure Report
+        if: always()
+        run: mvn allure:report
+        
+      - name: Upload Allure Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: allure-results-saucelabs
+          path: target/allure-results/
+          retention-days: 7
+
+  publish-report:
+    if: always()
+    needs: [test-android, test-saucelabs]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts/
+          
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          
+      - name: Merge Allure Results
+        run: |
+          mkdir -p target/allure-results
+          find artifacts/ -name "allure-results*" -type d -exec cp -r {}/* target/allure-results/ \; 2>/dev/null || true
+          
+      - name: Generate Combined Allure Report
+        run: |
+          mvn allure:report
+          
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: target/allure-report
+          destination_dir: reports/latest
+          
+      - name: Comment PR with Report Link
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const reportUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/latest/`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `📊 **Test Results Report**\n\nView the detailed Allure report: [${reportUrl}](${reportUrl})\n\n*Report generated from commit ${context.sha.substring(0, 7)}*`
+            });
+
+  notify:
+    if: always()
+    needs: [test-android, test-saucelabs, publish-report]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Notify on Success
+        if: success()
+        run: |
+          echo "✅ All tests passed successfully!"
+          
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "❌ Some tests failed. Check the reports for details."

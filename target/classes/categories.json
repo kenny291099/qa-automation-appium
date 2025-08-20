@@ -1,0 +1,41 @@
+[
+  {
+    "name": "Ignored tests",
+    "matchedStatuses": ["skipped"]
+  },
+  {
+    "name": "Infrastructure problems",
+    "matchedStatuses": ["broken", "failed"],
+    "messageRegex": ".*?(selenium|driver|connection|network|timeout).*"
+  },
+  {
+    "name": "Application defects",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*?(assert|expected|actual).*"
+  },
+  {
+    "name": "Authentication issues",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*?(login|auth|credential|permission).*"
+  },
+  {
+    "name": "UI/UX issues",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*?(element|locator|not found|not visible).*"
+  },
+  {
+    "name": "Data validation issues",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*?(validation|invalid|format|required).*"
+  },
+  {
+    "name": "Performance issues",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*?(slow|performance|timeout|wait).*"
+  },
+  {
+    "name": "Test data issues",
+    "matchedStatuses": ["failed", "broken"],
+    "messageRegex": ".*?(test data|data setup|precondition).*"
+  }
+]

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Sauce Labs Demo App Test Suite" verbose="1" parallel="methods" thread-count="3">
+    
+    <parameter name="environment" value="local"/>
+    <parameter name="device" value="android_pixel_7"/>
+    
+    <listeners>
+        <listener class-name="io.qameta.allure.testng.AllureTestNg"/>
+        <listener class-name="com.saucelabs.demo.utils.TestListener"/>
+    </listeners>
+
+    <test name="Smoke Tests" preserve-order="true">
+        <classes>
+            <class name="com.saucelabs.demo.tests.SmokeTests"/>
+        </classes>
+    </test>
+
+    <test name="Login Tests" preserve-order="true">
+        <classes>
+            <class name="com.saucelabs.demo.tests.LoginTests"/>
+        </classes>
+    </test>
+
+    <test name="Shopping Cart Tests" preserve-order="true">
+        <classes>
+            <class name="com.saucelabs.demo.tests.ShoppingCartTests"/>
+        </classes>
+    </test>
+
+    <test name="Product Tests" preserve-order="true">
+        <classes>
+            <class name="com.saucelabs.demo.tests.ProductTests"/>
+        </classes>
+    </test>
+
+</suite>

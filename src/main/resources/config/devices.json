@@ -1,0 +1,44 @@
+{
+  "devices": {
+    "local": {
+      "android_pixel_7": {
+        "platformName": "Android",
+        "platformVersion": "13.0",
+        "deviceName": "Pixel_7_API_33",
+        "automationName": "UiAutomator2",
+        "avd": "Pixel_7_API_33",
+        "systemPort": 8200,
+        "chromeDriverPort": 8000
+      },
+      "android_samsung_s23": {
+        "platformName": "Android",
+        "platformVersion": "13.0",
+        "deviceName": "Samsung_Galaxy_S23_API_33",
+        "automationName": "UiAutomator2",
+        "avd": "Samsung_Galaxy_S23_API_33",
+        "systemPort": 8201,
+        "chromeDriverPort": 8001
+      }
+    },
+    "saucelabs": {
+      "android_pixel_7": {
+        "platformName": "Android",
+        "platformVersion": "13.0",
+        "deviceName": "Google Pixel 7 GoogleAPI Emulator",
+        "automationName": "UiAutomator2"
+      },
+      "android_samsung_s23": {
+        "platformName": "Android",
+        "platformVersion": "13.0",
+        "deviceName": "Samsung Galaxy S23 GoogleAPI Emulator",
+        "automationName": "UiAutomator2"
+      },
+      "android_pixel_6": {
+        "platformName": "Android",
+        "platformVersion": "12.0",
+        "deviceName": "Google Pixel 6 GoogleAPI Emulator",
+        "automationName": "UiAutomator2"
+      }
+    }
+  }
+}
