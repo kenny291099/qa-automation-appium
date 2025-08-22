@@ -3,10 +3,9 @@
     "local": {
       "android_pixel_7": {
         "platformName": "Android",
-        "platformVersion": "13.0",
+        "platformVersion": "15",
         "deviceName": "Pixel_7_API_33",
         "automationName": "UiAutomator2",
-        "avd": "Pixel_7_API_33",
         "systemPort": 8200,
         "chromeDriverPort": 8000
       },

@@ -159,8 +159,9 @@ public class DriverFactory {
         int scriptTimeout = Integer.parseInt(ConfigManager.getProperty("script.timeout", environment));
         
         driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(implicitWait));
-        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(pageLoadTimeout));
-        driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(scriptTimeout));
+        // pageLoadTimeout and scriptTimeout not supported by UiAutomator2 for native apps
+        // driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(pageLoadTimeout));
+        // driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(scriptTimeout));
         
         logger.debug("Set timeouts - Implicit: {}s, Page Load: {}s, Script: {}s", 
                     implicitWait, pageLoadTimeout, scriptTimeout);

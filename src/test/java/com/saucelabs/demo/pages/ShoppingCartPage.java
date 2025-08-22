@@ -52,11 +52,6 @@ public class ShoppingCartPage extends BasePage {
     @AndroidFindBy(xpath = "//android.widget.TextView[contains(@content-desc, 'tax')]")
     private WebElement tax;
     
-    // Quantity controls for cart items
-    private final By quantityIncreaseButtons = By.xpath("//android.widget.Button[contains(@content-desc, 'Increase quantity')]");
-    private final By quantityDecreaseButtons = By.xpath("//android.widget.Button[contains(@content-desc, 'Decrease quantity')]");
-    private final By quantityDisplays = By.xpath("//android.widget.TextView[contains(@content-desc, 'quantity')]");
-    
     /**
      * Constructor
      * 

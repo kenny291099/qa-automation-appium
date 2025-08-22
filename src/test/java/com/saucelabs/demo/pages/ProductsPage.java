@@ -43,7 +43,6 @@ public class ProductsPage extends BasePage {
     private final By productItems = By.xpath("//android.view.ViewGroup[contains(@content-desc, 'product item')]");
     private final By productTitles = By.xpath("//android.widget.TextView[contains(@content-desc, 'product title')]");
     private final By productPrices = By.xpath("//android.widget.TextView[contains(@content-desc, 'product price')]");
-    private final By addToCartButtons = By.xpath("//android.widget.Button[contains(@content-desc, 'Add To Cart')]");
     
     // Specific product elements
     @AndroidFindBy(accessibility = "Sauce Labs Backpack")

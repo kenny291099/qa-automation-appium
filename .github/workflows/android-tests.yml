@@ -228,7 +228,7 @@ jobs:
           if-no-files-found: ignore
 
   test-saucelabs:
-    if: ${{ needs.setup.outputs.environment == 'saucelabs' }}
+    if: ${{ needs.setup.outputs.environment == 'saucelabs' && !github.event.pull_request.head.repo.fork }}
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -250,32 +250,39 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
           
-      - name: Upload App to Sauce Labs
+      - name: Download Demo App APK
         run: |
           # Download the APK
           mkdir -p src/main/resources/apps
           wget -O src/main/resources/apps/Android-MyDemoAppRN.1.3.0.build-244.apk \
             https://github.com/saucelabs/my-demo-app-android/releases/download/v1.3.0/Android-MyDemoAppRN.1.3.0.build-244.apk
-          
-          # Upload to Sauce Labs Storage (if credentials are available)
-          if [ -n "${{ secrets.SAUCE_USERNAME }}" ] && [ -n "${{ secrets.SAUCE_ACCESS_KEY }}" ]; then
-            curl -u "${{ secrets.SAUCE_USERNAME }}:${{ secrets.SAUCE_ACCESS_KEY }}" \
-              -X POST "https://api.us-west-1.saucelabs.com/rest/v1/storage/upload" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary @src/main/resources/apps/Android-MyDemoAppRN.1.3.0.build-244.apk
+            
+      - name: Upload App to Sauce Labs
+        env:
+          SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
+          SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
+        run: |
+          # Upload to Sauce Labs Storage (only runs if secrets are available due to job condition)
+          if [ -z "$SAUCE_USERNAME" ] || [ -z "$SAUCE_ACCESS_KEY" ]; then
+            echo "Sauce Labs credentials not available, skipping upload"
+            exit 0
           fi
+          curl -u "$SAUCE_USERNAME:$SAUCE_ACCESS_KEY" \
+            -X POST "https://api.us-west-1.saucelabs.com/rest/v1/storage/upload" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @src/main/resources/apps/Android-MyDemoAppRN.1.3.0.build-244.apk
           
       - name: Run Sauce Labs Tests
         env:
           SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
           SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
         run: |
-          if [ -n "$SAUCE_USERNAME" ] && [ -n "$SAUCE_ACCESS_KEY" ]; then
-            mvn test -Denvironment=saucelabs -Ddevice=${{ needs.setup.outputs.device }}
-          else
-            echo "Sauce Labs credentials not configured. Skipping Sauce Labs tests."
+          # Check if Sauce Labs credentials are available
+          if [ -z "$SAUCE_USERNAME" ] || [ -z "$SAUCE_ACCESS_KEY" ]; then
+            echo "Sauce Labs credentials not available, skipping tests"
             exit 0
           fi
+          mvn test -Denvironment=saucelabs -Ddevice=${{ needs.setup.outputs.device }}
           
       - name: Generate Allure Report
         if: always()

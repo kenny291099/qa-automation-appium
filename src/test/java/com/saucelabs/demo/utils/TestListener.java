@@ -44,36 +44,47 @@ public class TestListener implements ITestListener {
     @Override
     public void onTestSuccess(ITestResult result) {
         String testName = result.getMethod().getMethodName();
+        String className = result.getTestClass().getName();
         long duration = result.getEndMillis() - result.getStartMillis();
         
-        logger.info("Test PASSED: {} (Duration: {}ms)", testName, duration);
+        logger.info("Test PASSED: {}.{} (Duration: {}ms)", className, testName, duration);
         
         // Add success information to Allure
         Allure.addAttachment("Test Result", "PASSED");
         Allure.addAttachment("Duration (ms)", String.valueOf(duration));
         Allure.addAttachment("End Time", new java.util.Date(result.getEndMillis()).toString());
+        Allure.addAttachment("Success Timestamp", java.time.Instant.now().toString());
+        
+        // Note: No screenshot needed for successful tests - following failure-only pattern
     }
     
     @Override
     public void onTestFailure(ITestResult result) {
         String testName = result.getMethod().getMethodName();
+        String className = result.getTestClass().getName();
         long duration = result.getEndMillis() - result.getStartMillis();
         Throwable throwable = result.getThrowable();
         
-        logger.error("Test FAILED: {} (Duration: {}ms)", testName, duration, throwable);
+        logger.error("Test FAILED: {}.{} (Duration: {}ms)", className, testName, duration, throwable);
         
         // Add failure information to Allure
         Allure.addAttachment("Test Result", "FAILED");
         Allure.addAttachment("Duration (ms)", String.valueOf(duration));
         Allure.addAttachment("End Time", new java.util.Date(result.getEndMillis()).toString());
+        Allure.addAttachment("Failure Timestamp", java.time.Instant.now().toString());
         
         if (throwable != null) {
-            Allure.addAttachment("Error Message", throwable.getMessage());
+            Allure.addAttachment("Error Message", throwable.getMessage() != null ? throwable.getMessage() : "No error message available");
             Allure.addAttachment("Stack Trace", getStackTrace(throwable));
+            Allure.addAttachment("Exception Type", throwable.getClass().getSimpleName());
         }
         
         // Log environment information for debugging
         logEnvironmentInfo();
+        
+        // Note: Screenshot capture is handled by BaseTest.tearDown() method
+        // This ensures screenshots are only taken on failures and attached properly
+        logger.info("Screenshot capture will be handled by BaseTest for failed test: {}", testName);
     }
     
     @Override

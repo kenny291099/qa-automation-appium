@@ -3,7 +3,6 @@ package com.saucelabs.demo.tests;
 import com.saucelabs.demo.utils.ConfigManager;
 import com.saucelabs.demo.utils.DriverFactory;
 import com.saucelabs.demo.utils.ScreenshotUtils;
-import io.appium.java_client.AppiumDriver;
 import io.appium.java_client.android.AndroidDriver;
 import io.qameta.allure.Allure;
 import io.qameta.allure.Attachment;
@@ -38,6 +37,10 @@ public class BaseTest {
     @BeforeMethod(alwaysRun = true)
     @Parameters({"environment", "device"})
     public void setUp(@Optional("local") String environment, @Optional("android_pixel_7") String device) {
+        // Log JVM instance details to verify same JVM execution (matches qa-automation-playwright pattern)
+        String jvmName = java.lang.management.ManagementFactory.getRuntimeMXBean().getName();
+        String pid = jvmName.split("@")[0];
+        logger.info("Starting test: {} in JVM PID: {} ({})", this.getClass().getSimpleName(), pid, jvmName);
         logger.info("Setting up test with environment: {} and device: {}", environment, device);
         
         this.environment = environment;
@@ -62,6 +65,7 @@ public class BaseTest {
             Allure.addAttachment("Environment", environment);
             Allure.addAttachment("Device", device);
             Allure.addAttachment("Platform", deviceConfig.get("platformName") + " " + deviceConfig.get("platformVersion"));
+            Allure.addAttachment("JVM Process ID", pid);
             
             logger.info("Test setup completed successfully");
             
@@ -82,17 +86,25 @@ public class BaseTest {
         logger.info("Tearing down test: {}", result.getMethod().getMethodName());
         
         try {
-            // Take screenshot and attach to report if test failed
+            // Take screenshot and attach to report ONLY if test failed
             if (result.getStatus() == ITestResult.FAILURE && driver != null) {
+                logger.info("Test failed - capturing screenshot for: {}", result.getMethod().getMethodName());
                 captureScreenshotOnFailure(result.getMethod().getMethodName());
             }
             
             // Add test execution info to Allure
             if (result.getStatus() == ITestResult.SUCCESS) {
                 Allure.addAttachment("Test Status", "PASSED");
+                logger.info("Test passed: {}", result.getMethod().getMethodName());
             } else if (result.getStatus() == ITestResult.FAILURE) {
                 Allure.addAttachment("Test Status", "FAILED");
-                Allure.addAttachment("Failure Reason", result.getThrowable().getMessage());
+                if (result.getThrowable() != null) {
+                    Allure.addAttachment("Failure Reason", result.getThrowable().getMessage());
+                }
+                logger.error("Test failed: {}", result.getMethod().getMethodName());
+            } else if (result.getStatus() == ITestResult.SKIP) {
+                Allure.addAttachment("Test Status", "SKIPPED");
+                logger.warn("Test skipped: {}", result.getMethod().getMethodName());
             }
             
         } catch (Exception e) {
@@ -108,25 +120,37 @@ public class BaseTest {
     
     /**
      * Capture screenshot on test failure and attach to Allure report
+     * This method is called ONLY when a test fails to provide visual context
      * 
      * @param testName Name of the failed test
      */
     private void captureScreenshotOnFailure(String testName) {
         try {
             if (driver != null) {
+                logger.info("Capturing failure screenshot for test: {}", testName);
                 byte[] screenshot = ScreenshotUtils.captureScreenshot(driver);
-                if (screenshot != null) {
+                if (screenshot != null && screenshot.length > 0) {
+                    // Attach screenshot to Allure report
                     attachScreenshotToAllure(screenshot);
+                    logger.info("Screenshot attached to Allure report for failed test: {}", testName);
                     
-                    // Save screenshot to file if configured
-                    if (ConfigManager.getBooleanProperty("screenshot.enabled", environment)) {
-                        String screenshotPath = ConfigManager.getProperty("screenshot.path", environment);
-                        ScreenshotUtils.saveScreenshot(screenshot, screenshotPath, testName);
-                    }
+                    // Save screenshot to file (always save failure screenshots)
+                    String screenshotPath = "target/screenshots";
+                    ScreenshotUtils.saveScreenshot(screenshot, screenshotPath, testName + "_FAILURE");
+                    logger.info("Failure screenshot saved to: {}/{}_FAILURE.png", screenshotPath, testName);
+                    
+                    // Add screenshot path to Allure
+                    Allure.addAttachment("Screenshot Path", screenshotPath + "/" + testName + "_FAILURE.png");
+                } else {
+                    logger.warn("Failed to capture screenshot - no image data received");
                 }
+            } else {
+                logger.warn("Cannot capture screenshot - driver is null");
             }
         } catch (Exception e) {
-            logger.error("Failed to capture screenshot", e);
+            logger.error("Failed to capture failure screenshot for test: {}", testName, e);
+            // Add error info to Allure even if screenshot failed
+            Allure.addAttachment("Screenshot Error", "Failed to capture screenshot: " + e.getMessage());
         }
     }
     
@@ -143,21 +167,28 @@ public class BaseTest {
     
     /**
      * Capture screenshot manually and attach to Allure report
-     * This can be called from test methods for documentation purposes
+     * Use this method sparingly - only for important documentation steps
+     * Note: This should NOT be used for failure scenarios (handled automatically)
      * 
      * @param stepName Name of the step for the screenshot
      */
     protected void captureScreenshot(String stepName) {
         try {
             if (driver != null) {
+                logger.info("Capturing manual screenshot for step: {}", stepName);
                 byte[] screenshot = ScreenshotUtils.captureScreenshot(driver);
-                if (screenshot != null) {
+                if (screenshot != null && screenshot.length > 0) {
                     Allure.addAttachment(stepName, "image/png", 
                         new java.io.ByteArrayInputStream(screenshot), "png");
+                    logger.info("Manual screenshot attached for step: {}", stepName);
+                } else {
+                    logger.warn("Failed to capture manual screenshot - no image data");
                 }
+            } else {
+                logger.warn("Cannot capture manual screenshot - driver is null");
             }
         } catch (Exception e) {
-            logger.error("Failed to capture screenshot for step: {}", stepName, e);
+            logger.error("Failed to capture manual screenshot for step: {}", stepName, e);
         }
     }
     

@@ -38,7 +38,6 @@ public class ProductTests extends BaseTest {
         logStep("Testing product sorting");
         
         ProductsPage productsPage = new ProductsPage(driver);
-        var initialTitles = productsPage.getAllProductTitles();
         
         productsPage.sortByNameAscending();
         waitFor(2);

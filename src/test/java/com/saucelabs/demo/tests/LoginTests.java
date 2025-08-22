@@ -25,8 +25,6 @@ public class LoginTests extends BaseTest {
     // Test credentials for Sauce Labs Demo App
     private static final String VALID_USERNAME = "standard_user";
     private static final String VALID_PASSWORD = "secret_sauce";
-    private static final String LOCKED_USER = "locked_out_user";
-    private static final String PROBLEM_USER = "problem_user";
     
     @BeforeMethod(alwaysRun = true)
     public void navigateToLogin() {
